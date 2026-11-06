@@ -1160,6 +1160,14 @@ bool NVRM::placeLargeBar1()
     UInt64 wMin = 0, wMax = 0;
     const unsigned physBits = nvrmPhysBits();
     const UInt64 physTop = physBits >= 63 ? ~0ULL : (1ULL << physBits) - 1;
+    // ACPI _CRS can advertise a 64-bit window whose top is far above what IOKit can describe. The descriptor an
+    // address allocation creates - IODeviceMemory::withRange() -> IOGeneralMemoryDescriptor::initWithOptions - refuses
+    // any physical range whose last page is above UINT_MAX (16 TB with 4 KB pages). A BAR1 based at the top of a 64 TB
+    // window therefore cannot get a descriptor: by then the config writes have happened, descriptor creation fails and
+    // the placement is rolled back, so BAR1 ends up unplaced (RmInitAdapter 0x24:0x72:1281, or a black screen with a
+    // cursor). Keep the slot we pick - and the root port window written for it - below that ceiling.
+    const UInt64 kIokitAddressTop = ((UInt64)0xffffffffULL + 1) * PAGE_SIZE - 1;
+    const UInt64 addressTop = physTop < kIokitAddressTop ? physTop : kIokitAddressTop;
     const UInt64 fwBar1 = ((UInt64)old18 << 32) | (lo14 & ~0xFULL);
     if (nvrmHostWindow(fPCI, &wMin, &wMax)) {
         LOG("bar1: host bridge 64-bit window 0x%llx-0x%llx (ACPI _CRS), CPU reaches %u bits", wMin, wMax, physBits);
@@ -1174,7 +1182,7 @@ bool NVRM::placeLargeBar1()
         wMin = kIntel39Min; wMax = kIntel39Max;
         LOG("bar1: no 64-bit window in the host bridge's _CRS — using Intel's 256-512 GB PCI range 0x%llx-0x%llx (CPU reaches %u bits)", wMin, wMax, physBits);
     }
-    if (wMax > physTop) wMax = physTop;
+    if (wMax > addressTop) wMax = addressTop;
     const UInt64 total = bar1Size + bar3Size;
     if (wMax <= wMin || wMax - wMin + 1 < total) { LOG("bar1: window 0x%llx-0x%llx cannot hold %llu MB — not placing", wMin, wMax, total >> 20); return false; }
     UInt64 bar1Base = ((wMax + 1 - total) / bar1Size) * bar1Size, bar3Base = bar1Base + bar1Size, winEnd = bar3Base + bar3Size - 1;
