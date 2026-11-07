@@ -1539,19 +1539,65 @@ NV_STATUS NV_API_CALL nv_acpi_dsm_method(nv_state_t *nv, NvU8 *pAcpiDsmGuid, NvU
     IOACPIPlatformDevice *acpi = nv_xnu_gpu_acpi(nv);
     if (!acpi) return NV_ERR_NOT_SUPPORTED;
 
-    OSObject *args[4] = { OSData::withBytes(pAcpiDsmGuid, 16), OSNumber::withNumber(acpiDsmRev, 32),
-                          OSNumber::withNumber(acpiDsmSubFunction, 32),
-                          inParamSize ? OSData::withBytes(pInParams, inParamSize) : OSData::withCapacity(1) };
-    OSObject *o = NULL;
-    IOReturn r = (args[0] && args[1] && args[2] && args[3]) ? acpi->evaluateObject("_DSM", &o, args, 4) : kIOReturnNoMemory;
-    for (OSObject *a : args) OSSafeReleaseNULL(a);
+    // ACPI defines _DSM's fourth argument as a Package. Sending a Buffer makes ACPICA warn
+    // ("Argument #4 type mismatch - Found [Buffer], ACPI requires [Package]") and firmware that
+    // indexes Arg3 hands back an empty GETBACKLIGHT table (Lenovo Legion returns 0 B). Try the
+    // spec form first for the backlight table, then the Buffer form other firmware accepts.
     NV_STATUS st = NV_ERR_OPERATING_SYSTEM;
-    if (r == kIOReturnSuccess) {
-        NvU32 len = 0;
-        st = nv_xnu_acpi_extract(o, (NvU8 *)pOutData, *pSize, &len);
-        *pSize = (NvU16)len;
+    const NvU16 outCap = *pSize;
+    NvU32 outLen = 0;
+
+    int forms[4];
+    int nForms = 0;
+    if (acpiDsmSubFunction == NV_NBCI_FUNC_GETBACKLIGHT) {
+        forms[0] = 0; forms[1] = 1; forms[2] = 2; forms[3] = 3; nForms = 4;
+    } else {
+        forms[0] = 3; nForms = 1;   // GETOBJBYTYPE/support query: keep the historical Buffer form
     }
-    OSSafeReleaseNULL(o);
+
+    for (int fi = 0; fi < nForms; fi++) {
+        const int form = forms[fi];
+        OSArray *pkg = NULL;
+        OSData *data = inParamSize ? OSData::withBytes(pInParams, inParamSize) : NULL;
+        OSObject *arg3 = NULL;
+        if (form == 0) {
+            pkg = OSArray::withCapacity(1);
+            if (pkg && data) pkg->setObject(data);
+        } else if (form == 1) {
+            pkg = OSArray::withCapacity(1);
+            OSNumber *n = OSNumber::withNumber((unsigned long long)0, 32);
+            if (pkg && n) { pkg->setObject(n); n->release(); }
+        } else if (form == 2) {
+            pkg = OSArray::withCapacity(2);
+            if (pkg && data) pkg->setObject(data);
+            OSNumber *n = OSNumber::withNumber((unsigned long long)0, 32);
+            if (pkg && n) { pkg->setObject(n); n->release(); }
+        }
+        if (pkg) { arg3 = pkg; }
+        else { arg3 = data; data = NULL; }
+        if (data) data->release();
+        if (!arg3) continue;
+
+        OSObject *a[4] = { OSData::withBytes(pAcpiDsmGuid, 16), OSNumber::withNumber(acpiDsmRev, 32),
+                           OSNumber::withNumber(acpiDsmSubFunction, 32), arg3 };
+        OSObject *o = NULL;
+        IOReturn r = (a[0] && a[1] && a[2]) ? acpi->evaluateObject("_DSM", &o, a, 4) : kIOReturnNoMemory;
+        OSSafeReleaseNULL(a[0]); OSSafeReleaseNULL(a[1]); OSSafeReleaseNULL(a[2]);
+        arg3->release();
+
+        NvU32 len = 0;
+        NV_STATUS s = NV_ERR_OPERATING_SYSTEM;
+        if (r == kIOReturnSuccess) s = nv_xnu_acpi_extract(o, (NvU8 *)pOutData, outCap, &len);
+        OSSafeReleaseNULL(o);
+
+        if (acpiDsmSubFunction == NV_NBCI_FUNC_GETBACKLIGHT)
+            kprintf("NVRM-xnu: NBCI _DSM 0x%x form %d -> 0x%x (%u B)\n",
+                    acpiDsmSubFunction, form, s, (unsigned)len);
+
+        if (s == NV_OK && len > 0) { st = s; outLen = len; break; }
+        if (form == forms[nForms - 1]) { st = s; outLen = len; }
+    }
+    *pSize = (NvU16)outLen;
     // One line per subfunction, every GETBACKLIGHT call. A flat cap of 8 lines was spent by the support query and
     // the GETOBJBYTYPE fetches at GPU start, so a laptop log never showed whether the backlight table was asked for.
     // For the support query the first word is the firmware's subfunction bitmask (bit 0x14 = GETBACKLIGHT).
