@@ -2,7 +2,7 @@ name: NullMoth 2.7.2 + preflight BAR placement (full)
 on:
   workflow_dispatch:
   push:
-    branches: [preflight-272]
+    branches: [preflight-272, backlight-272]
 permissions:
   contents: read
 concurrency:
