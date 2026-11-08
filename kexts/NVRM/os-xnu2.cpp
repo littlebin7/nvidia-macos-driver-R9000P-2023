@@ -1530,7 +1530,7 @@ NV_STATUS NV_API_CALL nv_acpi_dod_method(nv_state_t *nv, NvU32 *pOutData, NvU32 
 static const char *nv_xnu_acpi_class(OSObject *o)
 {
     if (!o) return "null";
-    OSMetaClass *mc = o->getMetaClass();
+    const OSMetaClass *mc = o->getMetaClass();
     return mc ? mc->getClassName() : "?";
 }
 
