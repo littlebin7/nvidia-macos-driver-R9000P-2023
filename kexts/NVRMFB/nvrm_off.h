@@ -60,6 +60,10 @@ static inline bool nvrm_backlight_read(IORegistryEntry *options, UInt32 *level)
     }
     if (o) o->release();
     if (!valid) return false;
+    // v4: a whole-display power transition (dim / display sleep / lid) reaches the parameter handler as a
+    // 0 looking exactly like a user request. Saving that 0 made every later boot and wake restore it and the
+    // desktop came back at the 5% floor - black to the eye. A saved 0 is not a brightness, it is no record.
+    if (value == 0) return false;
     *level = value;
     return true;
 }
@@ -67,6 +71,8 @@ static inline bool nvrm_backlight_read(IORegistryEntry *options, UInt32 *level)
 static inline bool nvrm_backlight_write(IORegistryEntry *options, UInt32 level)
 {
     if (!options || level > kNVRMBacklightMax) return false;
+    // v4: never persist 0 (see nvrm_backlight_read); keep whatever the last real target was.
+    if (level == 0) return true;
     UInt32 current;
     if (nvrm_backlight_read(options, &current) && current == level) return true;
     // Version 2 uses the 5..100 hardware span; older records are converted when read.

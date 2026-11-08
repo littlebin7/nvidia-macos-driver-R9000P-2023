@@ -259,6 +259,17 @@ bool NVRMBacklightHandler::doIntegerSet(OSDictionary *params, const OSSymbol *pa
             paramName == sBrightnessProbe ? sLinearBrightnessProbe : sBrightnessProbe, level);
     }
     const bool userRequest = params && params->getObject(gIODisplayValueKey);
+    // v4: AppleBacklightDisplay delivers its whole-display power states through the same parameter with a
+    // 0 value, and that block carries the value key, so it looks like a user request. Apply the dim (the
+    // panel should go dark) but keep the user target and never persist the 0: a saved 0 was restored on
+    // every wake and boot, which left the desktop at the 5% floor (black screen with a cursor).
+    if (userRequest && level == 0 && OSAddAtomic(0, &fUserLevel) > 0) {
+        BLLOG("backlight: power-like 0 request applied without replacing user target %d/65535",
+              (int)OSAddAtomic(0, &fUserLevel));
+        fPending = level;
+        thread_call_enter(fApply);
+        return true;
+    }
     if (userRequest) {
         uint64_t deadline;
         clock_interval_to_deadline(kNVRMBacklightSaveDelaySeconds, kSecondScale, &deadline);
@@ -303,7 +314,7 @@ void NVRMBacklightHandler::persistFire(thread_call_param_t p, thread_call_param_
 {
     NVRMBacklightHandler *me = (NVRMBacklightHandler *)p;
     SInt32 target = OSAddAtomic(0, &me->fPersistPending);
-    if (target < 0 || OSAddAtomic(0, &me->fUserLevel) != target) return;
+    if (target <= 0 || OSAddAtomic(0, &me->fUserLevel) != target) return;   // v4: 0 is not a brightness
     uint64_t deadline = __atomic_load_n(&me->fPersistDeadline, __ATOMIC_SEQ_CST);
     if (mach_absolute_time() < deadline) {
         thread_call_enter_delayed(me->fPersist, deadline);

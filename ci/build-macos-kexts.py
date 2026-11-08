@@ -159,13 +159,17 @@ def link_kext(name, objects, archives, plist, sdk, out):
     if name == "NVRM":
         metadata["CFBundleVersion"] = "2.7.2"
         metadata["CFBundleShortVersionString"] = "2.7.2"
-        metadata["NullMothExperimentalBuild"] = "bar-preflight-v2"
+        metadata["NullMothExperimentalBuild"] = "backlight-v4"
+    elif name == "NVRMFB":
+        metadata["CFBundleVersion"] = "2.7.2"
+        metadata["CFBundleShortVersionString"] = "2.7.2"
+        metadata["NullMothExperimentalBuild"] = "backlight-v4"
     (bundle / "Contents/Info.plist").write_bytes(plistlib.dumps(metadata))
     run(["xcrun", "lipo", str(binary), "-verify_arch", "x86_64"])
     description = run(["file", str(binary)])
     if "kext bundle" not in description:
         raise RuntimeError(f"Unexpected binary format: {description}")
-    if name == "NVRM":
+    if name in ("NVRM", "NVRMFB"):
         run(["codesign", "--force", "--sign", "-", str(bundle)])
         run(["codesign", "--verify", "--strict", str(bundle)])
     return bundle
@@ -192,7 +196,7 @@ def main():
     resource = Path(run(["xcrun", "clang", "-print-resource-dir"]))
     if not (headers / "IOKit/IOLib.h").is_file():
         raise RuntimeError(f"Kernel SDK headers unavailable: {headers}")
-    proof = {"status": "BUILDING", "experiment": "bar-preflight-v2",
+    proof = {"status": "BUILDING", "experiment": "backlight-v4",
              "upstream": "v2.7.2", "nvidia_commit": NVIDIA_COMMIT,
              "fork_commit": run(["git", "rev-parse", "HEAD"], cwd=root),
              "sdk": str(sdk), "hardware_tested": False, "installed": False}
