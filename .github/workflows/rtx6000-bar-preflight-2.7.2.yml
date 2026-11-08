@@ -46,6 +46,6 @@ jobs:
             build-out/logs/
             build-out/build-proof.json
             build-out/SHA256SUMS.txt
-            build-out/nullmoth-2.7.2-rtx6000-bar-preflight-v2.tar.gz
+            build-out/nullmoth-2.7.2-rtx6000-backlight-v4.tar.gz
           if-no-files-found: warn
           retention-days: 14
