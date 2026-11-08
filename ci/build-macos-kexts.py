@@ -15,9 +15,9 @@ import tarfile
 import time
 import urllib.request
 
-NVIDIA_COMMIT = "1a82fbfda8f321b056eb3568850f9316c5e465c5"
-STOCK_URL = "https://github.com/nullmoth/nvidia-macos-driver/releases/download/v2.7.2/nullmoth-nvidia-2.7.2.tar.gz"
-STOCK_SHA256 = "928557fece27637b1184f5655833566e7d516b22708cc341b28d555055d8e50e"
+NVIDIA_COMMIT = "e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9"
+STOCK_URL = "https://github.com/nullmoth/nvidia-macos-driver/releases/download/v2.8.1/nullmoth-nvidia-2.8.1.tar.gz"
+STOCK_SHA256 = "1aa25a7f0ae28a27e77e1a761420cef9655af8b2b8effc1433142d1071795df8"
 
 
 def digest(path):
@@ -157,13 +157,13 @@ def link_kext(name, objects, archives, plist, sdk, out):
         log=out / "logs" / (name + "-link.log"))
     metadata = plistlib.loads(plist.read_bytes())
     if name == "NVRM":
-        metadata["CFBundleVersion"] = "2.7.2"
-        metadata["CFBundleShortVersionString"] = "2.7.2"
-        metadata["NullMothExperimentalBuild"] = "backlight-v4"
+        metadata["CFBundleVersion"] = "2.8.1"
+        metadata["CFBundleShortVersionString"] = "2.8.1"
+        metadata["NullMothExperimentalBuild"] = "620-backlight-v4"
     elif name == "NVRMFB":
-        metadata["CFBundleVersion"] = "2.7.2"
-        metadata["CFBundleShortVersionString"] = "2.7.2"
-        metadata["NullMothExperimentalBuild"] = "backlight-v4"
+        metadata["CFBundleVersion"] = "2.8.1"
+        metadata["CFBundleShortVersionString"] = "2.8.1"
+        metadata["NullMothExperimentalBuild"] = "620-backlight-v4"
     (bundle / "Contents/Info.plist").write_bytes(plistlib.dumps(metadata))
     run(["xcrun", "lipo", str(binary), "-verify_arch", "x86_64"])
     description = run(["file", str(binary)])
@@ -196,7 +196,7 @@ def main():
     resource = Path(run(["xcrun", "clang", "-print-resource-dir"]))
     if not (headers / "IOKit/IOLib.h").is_file():
         raise RuntimeError(f"Kernel SDK headers unavailable: {headers}")
-    proof = {"status": "BUILDING", "experiment": "backlight-v4",
+    proof = {"status": "BUILDING", "experiment": "620-backlight-v4",
              "upstream": "v2.7.2", "nvidia_commit": NVIDIA_COMMIT,
              "fork_commit": run(["git", "rev-parse", "HEAD"], cwd=root),
              "sdk": str(sdk), "hardware_tested": False, "installed": False}

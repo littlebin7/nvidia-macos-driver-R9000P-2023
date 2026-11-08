@@ -11,8 +11,8 @@ import tarfile
 import urllib.request
 from importlib.machinery import SourceFileLoader
 
-STOCK_URL = "https://github.com/nullmoth/nvidia-macos-driver/releases/download/v2.7.2/nullmoth-nvidia-2.7.2.tar.gz"
-STOCK_SHA256 = "928557fece27637b1184f5655833566e7d516b22708cc341b28d555055d8e50e"
+STOCK_URL = "https://github.com/nullmoth/nvidia-macos-driver/releases/download/v2.8.1/nullmoth-nvidia-2.8.1.tar.gz"
+STOCK_SHA256 = "1aa25a7f0ae28a27e77e1a761420cef9655af8b2b8effc1433142d1071795df8"
 
 
 def digest(path):
@@ -43,7 +43,7 @@ def main():
     if out == root or not out.is_relative_to(root):
         raise SystemExit("Output must be a build directory inside this checkout.")
     proof = json.loads((out / "build-proof.json").read_text())
-    if proof["status"] != "KEXTS_COMPILED_HARDWARE_NOT_TESTED" or proof["experiment"] != "backlight-v4":
+    if proof["status"] != "KEXTS_COMPILED_HARDWARE_NOT_TESTED" or proof["experiment"] != "620-backlight-v4":
         raise SystemExit("Both kext builds must succeed before packaging.")
     for name in ("NVRM", "NVRMFB"):
         p = out / "kexts" / (name + ".kext") / "Contents/MacOS" / name
@@ -83,17 +83,17 @@ def main():
     proof["unchanged_official_files"] = retained
     proof["stock_package_sha256"] = STOCK_SHA256
     proof["stock_components_retained"] = ["NVAccel", "NVRMAGDC", "all user-space and firmware files", "official install and uninstall scripts"]
-    proof["package_note"] = ("Personal research build based on NullMoth 2.7.2: IOKit 16 TiB BAR ceiling, staged "
+    proof["package_note"] = ("Personal research build based on NullMoth 2.8.1 (NVIDIA 620.70.06): IOKit 16 TiB BAR ceiling, staged "
                              "aperture list built before PCI writes, and backlight target guards in NVRMFB. "
                              "Not hardware validated.")
-    (package / "Library/NullMoth/backlight-v4.json").parent.mkdir(parents=True, exist_ok=True)
-    (package / "Library/NullMoth/backlight-v4.json").write_text(json.dumps(proof, indent=2) + "\n")
+    (package / "Library/NullMoth/620-backlight-v4.json").parent.mkdir(parents=True, exist_ok=True)
+    (package / "Library/NullMoth/620-backlight-v4.json").write_text(json.dumps(proof, indent=2) + "\n")
     (package / "EXPERIMENTAL-BUILD.json").write_text(json.dumps(proof, indent=2) + "\n")
     checksum = package / "SHA256SUMS"
     lines = [f"{digest(p)}  {p.relative_to(package).as_posix()}" for p in sorted(package.rglob("*"))
              if p.is_file() and p != checksum and not p.is_symlink()]
     checksum.write_text("\n".join(lines) + "\n")
-    suffix = "backlight-v4"
+    suffix = "620-backlight-v4"
     archive = out / f"nullmoth-2.7.2-rtx6000-{suffix}.tar.gz"
     with tarfile.open(archive, "w:gz") as tf:
         tf.add(package, arcname="pkgroot")

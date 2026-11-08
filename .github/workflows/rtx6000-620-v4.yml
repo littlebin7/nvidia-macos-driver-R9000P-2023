@@ -1,0 +1,54 @@
+name: NullMoth 2.8.1 + 16 TiB ceiling + backlight v4
+on:
+  workflow_dispatch:
+  push:
+    branches: [620-v4]
+concurrency:
+  group: 620-v4-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select matching Intel macOS toolchain
+        run: |
+          test "$(uname -m)" = x86_64
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          xcodebuild -version
+          command -v gmake || brew install make
+      - name: Fetch pinned NVIDIA source and matching official patches
+        run: |
+          set -euo pipefail
+          mkdir -p .deps && cd .deps
+          git init -q open-gpu-kernel-modules
+          cd open-gpu-kernel-modules
+          git remote add origin https://github.com/NVIDIA/open-gpu-kernel-modules.git
+          git fetch -q --depth 1 origin refs/tags/620.70.06
+          git checkout -q FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "e6a2e01579fbbd1ca2ed43fef2ee2589e9bd8bd9"
+          patch -p1 --forward < "$GITHUB_WORKSPACE/ci/patches/610-macos-version-headers.patch"
+          patch -p1 --forward < "$GITHUB_WORKSPACE/kexts/NVRM/patches/610-display-completion.patch"
+          cd src/nvidia-modeset
+          patch -p1 --forward < "$GITHUB_WORKSPACE/kexts/NVRM/patches/610-setmode-reason.patch"
+          patch -p1 --forward < "$GITHUB_WORKSPACE/kexts/NVRM/patches/615-viewport-scaling.patch"
+          patch -p1 --forward < "$GITHUB_WORKSPACE/kexts/NVRM/patches/610-backlight-register-log.patch"
+          cd "$GITHUB_WORKSPACE"
+          patch -p1 --forward -d .deps/open-gpu-kernel-modules < kexts/NVRM/patches/620-timer-clear-handle.patch
+      - name: Build and link the native Intel kexts
+        run: python3 ci/build-macos-kexts.py --vendor .deps/open-gpu-kernel-modules --output build-out --jobs 4
+      - name: Package with the checksum-pinned official 2.8.1 driver
+        run: python3 ci/package-experiment.py --output build-out
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nullmoth-2.8.1-620-${{ github.run_number }}
+          path: |
+            build-out/logs/
+            build-out/build-proof.json
+            build-out/SHA256SUMS.txt
+            build-out/nullmoth-2.8.1-rtx6000-620-backlight-v4.tar.gz
+          if-no-files-found: warn
+          retention-days: 14

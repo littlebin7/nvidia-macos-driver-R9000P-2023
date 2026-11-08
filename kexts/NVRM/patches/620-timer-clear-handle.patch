@@ -1,0 +1,13 @@
+diff --git a/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c b/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
+--- a/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
++++ b/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
+@@ -221,6 +221,10 @@ NV_STATUS tmrEventDestroyOSTimer_OSTIMER
+     {
+         // Cancel the callback of OS timer
+         status = osDestroyNanoTimer(pGpu->pOsGpuInfo, pTmrEvent->super.pOSTmrCBdata);
++        // NM: clear the handle after destroying it; retry paths call kfspCleanupBootState twice and a
++        // second destroy of the same event otherwise faults in nv_destroy_nano_timer on a stale handle.
++        pTmrEvent->super.pOSTmrCBdata = NULL;
+         pTmrEvent->super.flags &= ~TMR_FLAG_OS_TIMER_QUEUED;
+     }
+     else
