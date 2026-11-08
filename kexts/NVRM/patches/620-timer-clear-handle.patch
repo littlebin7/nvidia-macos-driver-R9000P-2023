@@ -1,7 +1,7 @@
 diff --git a/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c b/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
 --- a/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
 +++ b/src/nvidia/src/kernel/gpu/timer/timer_ostimer.c
-@@ -221,6 +221,10 @@ NV_STATUS tmrEventDestroyOSTimer_OSTIMER
+@@ -221,6 +221,9 @@ NV_STATUS tmrEventDestroyOSTimer_OSTIMER
      {
          // Cancel the callback of OS timer
          status = osDestroyNanoTimer(pGpu->pOsGpuInfo, pTmrEvent->super.pOSTmrCBdata);
