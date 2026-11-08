@@ -1446,6 +1446,9 @@ bool NVRM::placeLargeBar1()
         return false;
     }
     fPCI->configWrite16(0x04, cmd | 0x2);
+    // 620 grew readBARs(): it identifies each aperture by matching its physical address against the BAR registers, so the
+    // replacement list has to reach IOPCIFamily or BAR1 is simply absent from the nub (and RM refuses to start the GPU).
+    fPCI->setDeviceMemory(arr);
 
     fPCI->setProperty("nvrm-bar1-placed", bar1Base, 64);
     LOG("bar1: PLACED — BAR1 %llu MB live at 0x%llx", bar1Size >> 20, bar1Base);
