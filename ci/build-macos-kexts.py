@@ -70,7 +70,7 @@ def export_vendor(root, vendor, component, out):
     spdm_flags = shlex.split((generated / "ci-libspdm-cflags.txt").read_text())
     idname = "NV_RM_ID" if component == "nvidia" else "NV_KMS_ID"
     (generated / "g_nvid_string.c").write_text(
-        f'const char {idname}[] = "nvidia id: NVIDIA UNIX Open Kernel Module for x86_64 615.78.08 Research Build (yuanjing-hash 2.7.2-bar-preflight-v2)";\n'
+        f'const char {idname}[] = "nvidia id: NVIDIA UNIX Open Kernel Module for x86_64 620.70.06 Research Build (littlebin7 2.8.1-620-backlight-v4)";\n'
         f'const char *const p{idname} = {idname} + 11;\n')
     return directory, flags, sources, spdm_sources, spdm_flags, cc_flags, cxx_flags
 
@@ -197,7 +197,7 @@ def main():
     if not (headers / "IOKit/IOLib.h").is_file():
         raise RuntimeError(f"Kernel SDK headers unavailable: {headers}")
     proof = {"status": "BUILDING", "experiment": "620-backlight-v4",
-             "upstream": "v2.7.2", "nvidia_commit": NVIDIA_COMMIT,
+             "upstream": "v2.8.1", "nvidia_commit": NVIDIA_COMMIT,
              "fork_commit": run(["git", "rev-parse", "HEAD"], cwd=root),
              "sdk": str(sdk), "hardware_tested": False, "installed": False}
     (out / "build-proof.json").write_text(json.dumps(proof, indent=2))

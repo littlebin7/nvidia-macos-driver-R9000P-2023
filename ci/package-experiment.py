@@ -51,7 +51,7 @@ def main():
             magic, cpu, _, kind = struct.unpack("<4I", f.read(16))
         if (magic, cpu, kind) != (0xfeedfacf, 0x1000007, 11):
             raise SystemExit(f"Unexpected kext format: {name}")
-    stock = out / "stock-2.7.2.tar.gz"
+    stock = out / "stock-2.8.1.tar.gz"
     with urllib.request.urlopen(STOCK_URL, timeout=120) as response, stock.open("wb") as f:
         shutil.copyfileobj(response, f)
     if digest(stock) != STOCK_SHA256:
@@ -94,7 +94,7 @@ def main():
              if p.is_file() and p != checksum and not p.is_symlink()]
     checksum.write_text("\n".join(lines) + "\n")
     suffix = "620-backlight-v4"
-    archive = out / f"nullmoth-2.7.2-rtx6000-{suffix}.tar.gz"
+    archive = out / f"nullmoth-2.8.1-rtx6000-{suffix}.tar.gz"
     with tarfile.open(archive, "w:gz") as tf:
         tf.add(package, arcname="pkgroot")
     (out / "SHA256SUMS.txt").write_text(f"{digest(archive)}  {archive.name}\n")
