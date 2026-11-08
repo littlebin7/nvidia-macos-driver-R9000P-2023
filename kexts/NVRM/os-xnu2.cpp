@@ -1524,6 +1524,58 @@ NV_STATUS NV_API_CALL nv_acpi_dod_method(nv_state_t *nv, NvU32 *pOutData, NvU32 
     return st;
 }
 
+
+// Diagnostic build (backlight-dbg): report what Apple's ACPI layer actually hands back for the NBCI
+// backlight query, so the macOS glue can be fixed against evidence instead of guesses.
+static const char *nv_xnu_acpi_class(OSObject *o)
+{
+    if (!o) return "null";
+    OSMetaClass *mc = o->getMetaClass();
+    return mc ? mc->getClassName() : "?";
+}
+
+static void nv_xnu_acpi_dump(const char *tag, OSObject *o)
+{
+    if (!o) { kprintf("NVRM-xnu: %s object null\n", tag); return; }
+    kprintf("NVRM-xnu: %s object class %s\n", tag, nv_xnu_acpi_class(o));
+    if (OSArray *a = OSDynamicCast(OSArray, o)) {
+        unsigned count = a->getCount();
+        kprintf("NVRM-xnu: %s array count %u\n", tag, count);
+        for (unsigned i = 0; i < count && i < 8; i++) {
+            OSObject *c = a->getObject(i);
+            if (!c) { kprintf("NVRM-xnu: %s [%u] null\n", tag, i); continue; }
+            if (OSNumber *n = OSDynamicCast(OSNumber, c))
+                kprintf("NVRM-xnu: %s [%u] num 0x%llx\n", tag, i, n->unsigned64BitValue());
+            else if (OSData *d = OSDynamicCast(OSData, c))
+                kprintf("NVRM-xnu: %s [%u] data %u B\n", tag, i, (unsigned)d->getLength());
+            else
+                kprintf("NVRM-xnu: %s [%u] class %s\n", tag, i, nv_xnu_acpi_class(c));
+        }
+    } else if (OSNumber *n = OSDynamicCast(OSNumber, o)) {
+        kprintf("NVRM-xnu: %s num 0x%llx\n", tag, n->unsigned64BitValue());
+    } else if (OSData *d = OSDynamicCast(OSData, o)) {
+        kprintf("NVRM-xnu: %s data %u B, first 8", tag, (unsigned)d->getLength());
+        const UInt8 *b = (const UInt8 *)d->getBytesNoCopy();
+        for (unsigned i = 0; i < d->getLength() && i < 8; i++) kprintf(" %02x", b[i]);
+        kprintf("\n");
+    }
+}
+
+static void nv_xnu_acpi_ambient(IOACPIPlatformDevice *acpi)
+{
+    static bool done;
+    if (done) return;
+    done = true;
+    const char *names[] = { "NBCS", "PANT", "GPSS", "_BCL", "_BQC" };
+    for (unsigned i = 0; i < sizeof names / sizeof names[0]; i++) {
+        OSObject *o = NULL;
+        IOReturn r = acpi->evaluateObject(names[i], &o);
+        if (r == kIOReturnSuccess) nv_xnu_acpi_dump(names[i], o);
+        else kprintf("NVRM-xnu: %s not available (0x%x)\n", names[i], (unsigned)r);
+        OSSafeReleaseNULL(o);
+    }
+}
+
 NV_STATUS NV_API_CALL nv_acpi_dsm_method(nv_state_t *nv, NvU8 *pAcpiDsmGuid, NvU32 acpiDsmRev, NvBool acpiNvpcfDsmFunction,
                                          NvU32 acpiDsmSubFunction, void *pInParams, NvU16 inParamSize, NvU32 *outStatus,
                                          void *pOutData, NvU16 *pSize)
@@ -1538,6 +1590,7 @@ NV_STATUS NV_API_CALL nv_acpi_dsm_method(nv_state_t *nv, NvU8 *pAcpiDsmGuid, NvU
         return NV_ERR_NOT_SUPPORTED;
     IOACPIPlatformDevice *acpi = nv_xnu_gpu_acpi(nv);
     if (!acpi) return NV_ERR_NOT_SUPPORTED;
+    nv_xnu_acpi_ambient(acpi);
 
     // ACPI defines _DSM's fourth argument as a Package. Sending a Buffer makes ACPICA warn
     // ("Argument #4 type mismatch - Found [Buffer], ACPI requires [Package]") and firmware that
@@ -1587,6 +1640,10 @@ NV_STATUS NV_API_CALL nv_acpi_dsm_method(nv_state_t *nv, NvU8 *pAcpiDsmGuid, NvU
 
         NvU32 len = 0;
         NV_STATUS s = NV_ERR_OPERATING_SYSTEM;
+        if (acpiDsmSubFunction == NV_NBCI_FUNC_GETBACKLIGHT) {
+            kprintf("NVRM-xnu: _DSM form %d rc 0x%x inParams %u B\n", form, (unsigned)r, (unsigned)inParamSize);
+            if (r == kIOReturnSuccess) nv_xnu_acpi_dump("GETBACKLIGHT", o);
+        }
         if (r == kIOReturnSuccess) s = nv_xnu_acpi_extract(o, (NvU8 *)pOutData, outCap, &len);
         OSSafeReleaseNULL(o);
 
